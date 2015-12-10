@@ -29,7 +29,8 @@ Credentials:
 
 ### Installation
 **/!\ You need to fork this repository. See [How to submit your work?](#how-to-submit-your-work)**
-```virtualenv .
+```sh
+virtualenv .
 bin/pip install -r requirements.txt
 bin/python main.py initdb
 bin/python main.py
@@ -59,6 +60,7 @@ Separate your commits by task and use the following format for your commit messa
 Extra tasks:
 - Fix any bug you may find.
 - Fix any security issue you may find.
+
 
 ### Documentation
 This app use [Flask](http://flask.pocoo.org/docs/0.10/).
