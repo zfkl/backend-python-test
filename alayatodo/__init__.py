@@ -2,7 +2,8 @@ from flask import Flask, g
 import sqlite3
 
 # configuration
-DATABASE = '/tmp/alayatodo.db'
+# DATABASE = '/tmp/alayatodo.db'
+DATABASE = 'C:\Users\zfk\AppData\Local\Temp\\alayatodo.db'
 DEBUG = True
 SECRET_KEY = 'development key'
 USERNAME = 'admin'

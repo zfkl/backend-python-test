@@ -4,7 +4,8 @@ from flask import (
     redirect,
     render_template,
     request,
-    session
+    session,
+    flash
     )
 
 
@@ -57,7 +58,10 @@ def todos():
         return redirect('/login')
     cur = g.db.execute("SELECT * FROM todos")
     todos = cur.fetchall()
-    return render_template('todos.html', todos=todos)
+    if session.get('empty_description'):
+        error_empty = True
+        session.pop('empty_description', None)
+    return render_template('todos.html', **locals())
 
 
 @app.route('/todo', methods=['POST'])
@@ -65,9 +69,14 @@ def todos():
 def todos_POST():
     if not session.get('logged_in'):
         return redirect('/login')
+    todo_description = request.form.get('description', '')
+    if not todo_description:
+        flash('Please add your todo description')
+        session['empty_description'] = True
+        return redirect('/todo')
     g.db.execute(
         "INSERT INTO todos (user_id, description) VALUES ('%s', '%s')"
-        % (session['user']['id'], request.form.get('description', ''))
+        % (session['user']['id'], todo_description)
     )
     g.db.commit()
     return redirect('/todo')
