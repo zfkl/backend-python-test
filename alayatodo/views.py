@@ -6,8 +6,8 @@ from flask import (
     request,
     session,
     flash
-    )
-
+)
+from werkzeug.exceptions import BadRequest, Unauthorized
 
 @app.route('/')
 def home():
@@ -46,7 +46,15 @@ def logout():
 
 @app.route('/todo/<id>', methods=['GET'])
 def todo(id):
-    cur = g.db.execute("SELECT * FROM todos WHERE id ='%s'" % id)
+    """
+    Read a todo only with id, user_id, description if exist
+    empty if not exist
+    :param id: todo id
+    :return: /todo (item)
+    TODO: 404 if no todo
+    TODO: Only can read own user todo
+    """
+    cur = g.db.execute("SELECT * FROM todos WHERE id =%s" % id)
     todo = cur.fetchone()
     return render_template('todo.html', todo=todo)
 
@@ -54,6 +62,19 @@ def todo(id):
 @app.route('/todo', methods=['GET'])
 @app.route('/todo/', methods=['GET'])
 def todos():
+    """Authenticate users
+    :param empty
+    :return
+    -Redirect user to Read todos and if user was logged in but tried to
+    fill an empty string for create a new Todo, there will be an error_empty tag
+    in template to update the Add Todo description.
+    -if log fails, redirect to log.
+    TODO:
+     -add max retry
+     -add forget credentials
+     -add bearer token authentication
+     -only read own users todo unless admin user
+    """
     if not session.get('logged_in'):
         return redirect('/login')
     cur = g.db.execute("SELECT * FROM todos")
@@ -64,9 +85,18 @@ def todos():
     return render_template('todos.html', **locals())
 
 
-@app.route('/todo', methods=['POST'])
 @app.route('/todo/', methods=['POST'])
 def todos_POST():
+    """This view is for Create todo:
+    -Create a new Todo that is not empty string. There must be the 'description'
+    tag in request form  or it will be a todo Update.
+    There will be a flash message and change in placeholder to notify the end user
+    if the string is empty.
+    database updated and front end with new todo at bottom
+    :param empty
+    :return /todo (list of todos) or /login if not logged
+    """
+    req = request
     if not session.get('logged_in'):
         return redirect('/login')
     todo_description = request.form.get('description', '')
@@ -75,8 +105,8 @@ def todos_POST():
         session['empty_description'] = True
         return redirect('/todo')
     g.db.execute(
-        "INSERT INTO todos (user_id, description) VALUES ('%s', '%s')"
-        % (session['user']['id'], todo_description)
+        "INSERT INTO todos (user_id, description, is_completed) VALUES (%s, '%s', %s)"
+        % (session['user']['id'], todo_description, 0)
     )
     g.db.commit()
     return redirect('/todo')
@@ -84,8 +114,37 @@ def todos_POST():
 
 @app.route('/todo/<id>', methods=['POST'])
 def todo_delete(id):
+    """
+    Delete a todo from database, thus from front end
+    :param id: todo id
+    :return: redirect to login if not logged in
+    redirect to /todo (list of todos)
+    """
     if not session.get('logged_in'):
         return redirect('/login')
-    g.db.execute("DELETE FROM todos WHERE id ='%s'" % id)
+    g.db.execute("DELETE FROM todos WHERE id =%s" % id)
+    g.db.commit()
+    return redirect('/todo')
+
+@app.route('/todo/?is_completed=<is_completed>&id=<id>', methods=['POST'])
+def todo_update(id, is_completed):
+    """
+    Update todo with its is_completed value 0/1, update checkbox checked/not checked
+    :param id: todo id
+    :param is_completed: with values 'True' or 'False' to be converted in 1 or 0 respectively
+    :return: redirect to login if not logged in
+    redirect to /todo (list of todos)
+    """
+    if not session.get('logged_in'):
+        return redirect('/login')
+    # "UPDATE todos SET is_completed = %s where id =%s" % (is_completed, id)
+    is_completed = int(is_completed == 'True')
+    cur = g.db.execute(
+        "UPDATE todos SET is_completed = %s where id =%s AND user_id = 1" % (is_completed, id)  # TODO I am user_id 1 get my user_id later
+    )
+
+    # Assume for now that if there is 0 row updated, it means you tried to update someone else s todo
+    if cur.rowcount==0:
+        raise Unauthorized("It is not your task")
     g.db.commit()
     return redirect('/todo')
