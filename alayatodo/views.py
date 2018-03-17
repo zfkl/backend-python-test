@@ -12,8 +12,7 @@ from flask import (
     flash
     )
 from collections import OrderedDict
-)
-from werkzeug.exceptions import BadRequest, Unauthorized
+from werkzeug.exceptions import BadRequest, Unauthorized, NotFound
 
 @app.route('/')
 def home():
@@ -157,16 +156,15 @@ def todo_update(id, is_completed):
     :return: redirect to login if not logged in
     redirect to /todo (list of todos)
     """
+    req = request
     if not session.get('logged_in'):
         return redirect('/login')
-    # "UPDATE todos SET is_completed = %s where id =%s" % (is_completed, id)
     is_completed = int(is_completed == 'True')
     cur = g.db.execute(
-        "UPDATE todos SET is_completed = %s where id =%s AND user_id = 1" % (is_completed, id)  # TODO I am user_id 1 get my user_id later
+        "UPDATE todos SET is_completed = %s where id =%s AND user_id = %s" % (is_completed, id, session['user']['id'])
     )
 
-    # Assume for now that if there is 0 row updated, it means you tried to update someone else s todo
-    if cur.rowcount==0:
-        raise Unauthorized("It is not your task")
+    if cur.rowcount == 0:
+        raise NotFound("It is not your task")
     g.db.commit()
     return redirect('/todo')
