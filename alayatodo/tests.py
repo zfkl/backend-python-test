@@ -70,3 +70,11 @@ class ToDoViewTest(TestCase):
             description = 'test'
             response = c.post('/todo/%3Fis_completed%3DFalse%26id%3D1000', data=dict(description=description))
             self.assertEquals(response.status_code, 401)
+
+    def test_json_todo_404(self):
+        """this todo doesnt exist 404 for response code"""
+        with app.test_client() as c:
+            log_response = c.post('/login', data=dict(username='user1', password='user1'))
+            description = ''
+            response = c.get('/todo/999999/json', data=dict(description=description))
+            self.assertEquals(response.status_code, 404)

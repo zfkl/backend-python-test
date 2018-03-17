@@ -1,11 +1,17 @@
+import json
+
 from alayatodo import app
 from flask import (
+    abort,
     g,
     redirect,
     render_template,
     request,
+    Response,
     session,
     flash
+    )
+from collections import OrderedDict
 )
 from werkzeug.exceptions import BadRequest, Unauthorized
 
@@ -84,6 +90,22 @@ def todos():
         session.pop('empty_description', None)
     return render_template('todos.html', **locals())
 
+@app.route('/todo/<id>/json', methods=['GET'])
+def todo_json(id):
+    """
+    Read json from todo data based on todo id
+    :param id: todo id
+    :return: json data for single todo
+    TODO: only read user own data unless admin user
+    """
+    if not session.get('logged_in'):
+        return redirect('/login')
+    cur = g.db.execute("SELECT * FROM todos WHERE id ='%s'" % id)
+    todo = cur.fetchone()
+    if todo is None:
+        return abort(404)
+    todo_dump = json.dumps(OrderedDict(todo))
+    return Response(todo_dump, status=200, mimetype='application/json')
 
 @app.route('/todo/', methods=['POST'])
 def todos_POST():
