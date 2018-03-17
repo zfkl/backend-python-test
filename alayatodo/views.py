@@ -113,6 +113,7 @@ def todos_POST():
     tag in request form  or it will be a todo Update.
     There will be a flash message and change in placeholder to notify the end user
     if the string is empty.
+    Flash message for Create todo confirmation
     database updated and front end with new todo at bottom
     :param empty
     :return /todo (list of todos) or /login if not logged
@@ -130,19 +131,26 @@ def todos_POST():
         % (session['user']['id'], todo_description, 0)
     )
     g.db.commit()
+    flash('Todo {} is added!'.format(todo_description))
     return redirect('/todo')
 
 
 @app.route('/todo/<id>', methods=['POST'])
 def todo_delete(id):
     """
-    Delete a todo from database, thus from front end
+    Delete a todo from database, thus from front end,
+    flash message confirming deletion
     :param id: todo id
     :return: redirect to login if not logged in
     redirect to /todo (list of todos)
     """
     if not session.get('logged_in'):
         return redirect('/login')
+    cur = g.db.execute("SELECT description FROM todos WHERE id ='%s'" % id)
+    todo = cur.fetchone()
+    if todo is not None:
+        todo_description = dict(todo)['description']
+        flash('Todo {} is removed!'.format(todo_description))
     g.db.execute("DELETE FROM todos WHERE id =%s" % id)
     g.db.commit()
     return redirect('/todo')
