@@ -25,7 +25,7 @@
               <li><a href="{{ url_for('logout') }}"><span class="glyphicon glyphicon-user"></span>
                 {{ session.user.username }} Logout</a></li>
             {% else %}
-              <li><a href="{{ url_for('login') }}">Login</a></li>
+              <li><a href="{{ url_for('login_get') }}">Login</a></li>
             {% endif %}
           </ul>
         </div>

@@ -5,12 +5,12 @@
     <h1>Todo List:</h1>
     <table class="table table-striped">
         <th>#</th><th>User</th><th>Description</th><th>Completed</th><th></th><th></th><th></th>
-        {% for todo in todos %}
+        {% for todo in todos_read %}
             <tr>
                 <td>{{ todo.id }}</td>
                 <td>{{ todo.user_id }}</td>
                 <td>
-                    <a href="{{ url_for('todo', id=todo.id) }}">
+                    <a href="{{ url_for('todo_get', id=todo.id) }}">
                        {{ todo.description }}
                     </a>
                 </td>
@@ -36,7 +36,7 @@
             </tr>
         {% endfor %}
         <tr>
-            <form method="post" action="{{ url_for('todos_POST') }}">
+            <form method="post" action="{{ url_for('todo_post') }}">
                 <td colspan="3">
                     {% if error_empty %}
                      <input type="textbox" name="description" class="small-6 small-center" placeholder="Must be non empty!">

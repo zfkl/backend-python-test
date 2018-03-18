@@ -69,6 +69,14 @@ class ToDoViewTest(TestCase):
             response = c.post('/todo/%3Fis_completed%3DFalse%26id%3D1000', data=dict(description=description))
             self.assertEquals(response.status_code, 404)
 
+    def test_update_is_completed_someone_else_task_401(self):
+        """The response code should be 401: NOK case for the update of user 2 todo tast 6"""
+        with app.test_client() as c:
+            log_response = c.post('/login', data=dict(username='user1', password='user1'))
+            description = 'test'
+            response = c.post('/todo/%3Fis_completed%3DFalse%26id%3D6', data=dict(description=description))
+            self.assertEquals(response.status_code, 401)
+
     def test_json_todo_404(self):
         """this todo doesnt exist 404 for response code"""
         with app.test_client() as c:
