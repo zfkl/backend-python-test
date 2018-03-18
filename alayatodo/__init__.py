@@ -11,11 +11,12 @@ DEBUG = True
 SECRET_KEY = 'development key'
 USERNAME = 'admin'
 PASSWORD = 'default'
-
+MAX_PER_PAGE = 2
 
 app = Flask(__name__)
 app.config.from_object(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///alayacare_.sqlite3'
+app.config['TODO_PER_PAGE'] = MAX_PER_PAGE
 
 def connect_db():
     conn = sqlite3.connect(app.config['DATABASE'])

@@ -1,4 +1,5 @@
 import json
+import numpy as np
 
 from alayatodo import app
 from flask import (
@@ -10,7 +11,7 @@ from flask import (
     flash
     )
 from collections import OrderedDict
-from helpers import model_serializer
+from helpers import model_serializer, url_and_page_redirect
 from models import users, todos, db
 from werkzeug.exceptions import NotFound, Unauthorized
 
@@ -74,9 +75,9 @@ def todo_get(id):
     return render_template('todo.html', todo=todo_read)
 
 
-@app.route('/todos', methods=['GET'])
-@app.route('/todos/', methods=['GET'])
-def todos_get():
+@app.route('/todos/', defaults={'page': 1}, methods=['GET'])
+@app.route('/todos/?page=<page>', methods=['GET'])
+def todos_get(page):
     """Authenticate users
     :param empty
     :return
@@ -84,6 +85,7 @@ def todos_get():
     fill an empty string for create a new Todo, there will be an error_empty tag
     in template to update the Add Todo description.
     -if log fails, redirect to log.
+    Pagination for limit data read in UI, limit set with config param 'TODO_PER_PAGE'
     TODO:
      -add max retry
      -add forget credentials
@@ -92,8 +94,11 @@ def todos_get():
     if not session.get('logged_in'):
         return redirect('/login')
 
-    # todos_read = todos.query.all() to keep for testing impersonification on UI
-    todos_read = todos.query.filter_by(user_id=session['user']['id'])
+    page = int(request.args.get('page', 1))
+
+    # todos_read = todos.query.all()  # to keep for testing impersonification on UI
+    todos_read = todos.query.filter_by(user_id=session['user']['id']).paginate(
+        page, app.config['TODO_PER_PAGE']).items
     if hasattr(session, 'empty_description'):
         error_empty = True
         setattr(session, 'empty_description', None)
@@ -119,19 +124,20 @@ def todo_json_get(id):
     todo_dump = json.dumps(model_serializer(todo_read))
     return Response(todo_dump, status=200, mimetype='application/json')
 
-@app.route('/todo/', methods=['POST'])
-def todo_post():
+@app.route('/todo/', defaults={'page': 1}, methods=['POST'])
+@app.route('/todo/?page=<page>', methods=['POST'])
+def todo_post(page):
     """This view is for Create todo:
     -Create a new Todo that is not empty string. There must be the 'description'
     tag in request form  or it will be a todo Update.
     There will be a flash message and change in placeholder to notify the end user
     if the string is empty.
     Flash message for Create todo confirmation
-    database updated and front end with new todo at bottom
-    :param empty
+    database updated and front end with new todo at bottom.
+    Add a todo and stay on the same page
+    :param page of todo list
     :return /todo (list of todos) or /login if not logged
     """
-    req = request
     if not session.get('logged_in'):
         return redirect('/login')
 
@@ -139,17 +145,23 @@ def todo_post():
     if not todo_description:
         flash('Please add your todo description')
         session['empty_description'] = True
-        return redirect('/todos')
+        url = url_and_page_redirect()[0]
+        page = url_and_page_redirect()[1]
+        redirect(url)
 
+    page = int(request.args.get('page', 1))
     todo_inserted = todos(user_id=session['user']['id'], description=todo_description, is_completed=0)
     db.session.add(todo_inserted)
     db.session.commit()
     flash('Todo {} is added!'.format(todo_description))
-    return redirect('/todos')
 
+    url = url_and_page_redirect()[0]
+    page = url_and_page_redirect()[1]
+    redirect(url)
 
-@app.route('/todo/<id>', methods=['POST'])
-def todo_delete(id):
+@app.route('/todo/<id>', defaults={'page': 1}, methods=['POST'])
+@app.route('/todo/<id>/?page=<page>', methods=['POST'])
+def todo_delete(id, page):
     """
     Delete a todo from database, thus from front end,
     flash message confirming deletion
@@ -164,36 +176,44 @@ def todo_delete(id):
     # todo = cur.fetchone()
     todo_read = todos.query.get(id)
     if todo_read is None:
-        raise NotFound("todo not found")
+        raise NotFound("todo to delete not found")
 
+    page = int(request.args.get('page', 1))
     todo_description = model_serializer(todo_read)['description']
     flash('Todo {} is removed!'.format(todo_description))
-    todos.query.delete(id)
+    todo_delete = todos.query.get(id)
+    db.session.delete(todo_delete)
     db.session.commit()
-    return redirect('/todos')
 
-@app.route('/todo/?is_completed=<is_completed>&id=<id>', methods=['POST'])
-def todo_update(id, is_completed):
+    url = url_and_page_redirect()[0]
+    page = url_and_page_redirect()[1]
+    redirect(url)
+
+@app.route('/todo/?is_completed=<is_completed>&id=<id>&page=<page>', methods=['POST'])
+def todo_update(id, is_completed, page):
     """
     Update todo with its is_completed value 0/1, update checkbox checked/not checked
     :param id: todo id
     :param is_completed: with values 'True' or 'False' to be converted in 1 or 0 respectively
+    :param page of the list of todo
     :return: redirect to login if not logged in
-    redirect to /todo (list of todos)
+    redirect to /todo/?page=page (list of todos), so the user stays on same page after update
     """
-    req = request
-    _id = session['user']['id']
     if not session.get('logged_in'):
         return redirect('/login')
 
+    page = int(page)
     is_completed = int(is_completed == 'True')
     todo_updated = todos.query.get(id)
     if todo_updated is None:
-        raise NotFound("todo not found")
+        raise NotFound("todo to update not found")
 
     if todo_updated.user_id != session['user']['id']:
         raise Unauthorized("Not your todo")
 
     todo_updated.is_completed = is_completed
     db.session.commit()
-    return redirect('/todos')
+
+    url = url_and_page_redirect()[0]
+    page = url_and_page_redirect()[1]
+    return redirect(url)
