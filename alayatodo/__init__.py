@@ -1,9 +1,12 @@
-from flask import Flask, g
 import sqlite3
+
+from flask import Flask, g
+
 
 # configuration
 # DATABASE = '/tmp/alayatodo.db'
 DATABASE = 'C:\Users\zfk\AppData\Local\Temp\\alayatodo.db'
+
 DEBUG = True
 SECRET_KEY = 'development key'
 USERNAME = 'admin'
@@ -12,7 +15,7 @@ PASSWORD = 'default'
 
 app = Flask(__name__)
 app.config.from_object(__name__)
-
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///alayacare_.sqlite3'
 
 def connect_db():
     conn = sqlite3.connect(app.config['DATABASE'])
