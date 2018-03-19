@@ -15,7 +15,7 @@
                     </a>
                 </td>
                 <td>
-                    <form method="post" action="{{ url_for('todo_update', id=todo.id, is_completed=not todo.is_completed, page=page) }}">
+                    <form method="post" action="{{ url_for('todo_update', id=todo.id, is_completed=not todo.is_completed) }}">
                         <td>
                             {% if todo.is_completed %}
                             <input type="checkbox" checked/>
@@ -29,7 +29,7 @@
                     </form>
                 </td>
                 <td>
-                    <form method="post" action="{{ url_for('todo_delete', id=todo.id, page=page) }}">
+                    <form method="post" action="{{ url_for('todo_delete', id=todo.id) }}">
                         <button type="submit" class="btn btn-xs btn-danger"><span class="glyphicon glyphicon-remove glyphicon-white"></span></button>
                     </form>
                 </td>

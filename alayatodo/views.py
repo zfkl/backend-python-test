@@ -1,5 +1,10 @@
+"""
+Execute logic part when user hits an endpoint with correct url route
+todos/ for any listing of todos
+todo/ for a single instance of Todo model
+
+"""
 import json
-import numpy as np
 
 from alayatodo import app
 from flask import (
@@ -10,9 +15,8 @@ from flask import (
     session,
     flash
     )
-from collections import OrderedDict
-from helpers import model_serializer, url_and_page_redirect
-from models import users, todos, db
+from alayatodo.helpers import model_serializer, url_redirect
+from alayatodo.models import Users, Todos, db
 from werkzeug.exceptions import NotFound, Unauthorized
 
 
@@ -39,7 +43,7 @@ def login_post():
     """
     username = request.form.get('username')
     password = request.form.get('password')
-    user = users.query.filter_by(username=username).filter_by(password=password).first()
+    user = Users.query.filter_by(username=username).filter_by(password=password).first()
     if user:
         session['logged_in'] = True
         session['user'] = model_serializer(user)
@@ -67,7 +71,7 @@ def todo_get(id):
     :return: /todo (item)
     """
 
-    todo_read = todos.query.get(id)
+    todo_read = Todos.query.get(id)
     if todo_read is None:
         raise NotFound("todo not found")
     if todo_read.user_id != session['user']['id']:
@@ -79,7 +83,7 @@ def todo_get(id):
 @app.route('/todos/?page=<page>', methods=['GET'])
 def todos_get(page):
     """Authenticate users
-    :param empty
+    :param page to get data from the specific page
     :return
     -Redirect user to Read todos and if user was logged in but tried to
     fill an empty string for create a new Todo, there will be an error_empty tag
@@ -97,12 +101,13 @@ def todos_get(page):
     page = int(request.args.get('page', 1))
 
     # todos_read = todos.query.all()  # to keep for testing impersonification on UI
-    todos_read = todos.query.filter_by(user_id=session['user']['id']).paginate(
+    todos_read = Todos.query.filter_by(user_id=session['user']['id']).paginate(
         page, app.config['TODO_PER_PAGE']).items
     if hasattr(session, 'empty_description'):
         error_empty = True
         setattr(session, 'empty_description', None)
     return render_template('todos.html', **locals())
+
 
 @app.route('/todo/<id>/json', methods=['GET'])
 def todo_json_get(id):
@@ -114,7 +119,7 @@ def todo_json_get(id):
     if not session.get('logged_in'):
         return redirect('/login')
 
-    todo_read = todos.query.get(id)
+    todo_read = Todos.query.get(id)
     if todo_read is None:
         return NotFound("todo not found")
 
@@ -124,9 +129,9 @@ def todo_json_get(id):
     todo_dump = json.dumps(model_serializer(todo_read))
     return Response(todo_dump, status=200, mimetype='application/json')
 
-@app.route('/todo/', defaults={'page': 1}, methods=['POST'])
-@app.route('/todo/?page=<page>', methods=['POST'])
-def todo_post(page):
+
+@app.route('/todo/', methods=['POST'])
+def todo_post():
     """This view is for Create todo:
     -Create a new Todo that is not empty string. There must be the 'description'
     tag in request form  or it will be a todo Update.
@@ -134,7 +139,7 @@ def todo_post(page):
     if the string is empty.
     Flash message for Create todo confirmation
     database updated and front end with new todo at bottom.
-    Add a todo and stay on the same page
+    Add a todo and stay on the same page or go to the new page depending on pagination
     :param page of todo list
     :return /todo (list of todos) or /login if not logged
     """
@@ -145,23 +150,21 @@ def todo_post(page):
     if not todo_description:
         flash('Please add your todo description')
         session['empty_description'] = True
-        url = url_and_page_redirect()[0]
-        page = url_and_page_redirect()[1]
-        redirect(url)
+        url = url_redirect()
+        return redirect(url)
 
-    page = int(request.args.get('page', 1))
-    todo_inserted = todos(user_id=session['user']['id'], description=todo_description, is_completed=0)
+    todo_inserted = Todos(user_id=session['user']['id'],
+                          description=todo_description, is_completed=0)
     db.session.add(todo_inserted)
     db.session.commit()
     flash('Todo {} is added!'.format(todo_description))
 
-    url = url_and_page_redirect()[0]
-    page = url_and_page_redirect()[1]
-    redirect(url)
+    url = url_redirect(is_create=True)
+    return redirect(url)
 
-@app.route('/todo/<id>', defaults={'page': 1}, methods=['POST'])
-@app.route('/todo/<id>/?page=<page>', methods=['POST'])
-def todo_delete(id, page):
+
+@app.route('/todo/<id>', methods=['POST'])
+def todo_delete(id):
     """
     Delete a todo from database, thus from front end,
     flash message confirming deletion
@@ -174,23 +177,22 @@ def todo_delete(id, page):
 
     # cur = g.db.execute("SELECT description FROM todos WHERE id ='%s'" % id)
     # todo = cur.fetchone()
-    todo_read = todos.query.get(id)
+    todo_read = Todos.query.get(id)
     if todo_read is None:
         raise NotFound("todo to delete not found")
 
-    page = int(request.args.get('page', 1))
     todo_description = model_serializer(todo_read)['description']
     flash('Todo {} is removed!'.format(todo_description))
-    todo_delete = todos.query.get(id)
+    todo_delete = Todos.query.get(id)
     db.session.delete(todo_delete)
     db.session.commit()
 
-    url = url_and_page_redirect()[0]
-    page = url_and_page_redirect()[1]
-    redirect(url)
+    url = url_redirect(is_delete=True)
+    return redirect(url)
 
-@app.route('/todo/?is_completed=<is_completed>&id=<id>&page=<page>', methods=['POST'])
-def todo_update(id, is_completed, page):
+
+@app.route('/todo/?is_completed=<is_completed>&id=<id>', methods=['POST'])
+def todo_update(id, is_completed):
     """
     Update todo with its is_completed value 0/1, update checkbox checked/not checked
     :param id: todo id
@@ -198,13 +200,13 @@ def todo_update(id, is_completed, page):
     :param page of the list of todo
     :return: redirect to login if not logged in
     redirect to /todo/?page=page (list of todos), so the user stays on same page after update
+    or goes to the new page depending on pagination
     """
     if not session.get('logged_in'):
         return redirect('/login')
 
-    page = int(page)
     is_completed = int(is_completed == 'True')
-    todo_updated = todos.query.get(id)
+    todo_updated = Todos.query.get(id)
     if todo_updated is None:
         raise NotFound("todo to update not found")
 
@@ -214,6 +216,5 @@ def todo_update(id, is_completed, page):
     todo_updated.is_completed = is_completed
     db.session.commit()
 
-    url = url_and_page_redirect()[0]
-    page = url_and_page_redirect()[1]
+    url = url_redirect(is_update=True)
     return redirect(url)
