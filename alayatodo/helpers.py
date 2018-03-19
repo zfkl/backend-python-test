@@ -28,25 +28,29 @@ def model_serializer(model):
     return result
 
 
-def url_redirect(is_delete=False, is_create=False, is_update=False):
+def url_redirect(page_for_update=None, is_delete=False, is_create=False):
     """which page to display depends on MAX_PER_PAGE and total records
     user may want to stay on same page after CRUD operations
     for a delete or a create, the user might have to change page depending on pagination
     if only record remains and is deleted, we go back
     if the page is full we go to the next
-    :param no params
+    :param page_for_update user stays on same page
+    :param is_create, to detect a creation of todo
+    :param is_delete, to detect a delete of todo
     :return url to redirect and page in tuple
     """
     todo_total_count = Todos.query.filter_by(user_id=session['user']['id']).count()
     page = int(np.ceil(todo_total_count / np.float(app.config['TODO_PER_PAGE'])))
 
-    number_record_visible = todo_total_count - page * MAX_PER_PAGE
-    if is_delete and number_record_visible == 1:
+    number_record_visible = todo_total_count - (page - 1) * MAX_PER_PAGE
+    if is_delete and number_record_visible == 0:
         page-=1
         np.max([page, 1])
     if is_create and number_record_visible % MAX_PER_PAGE == 0:
         page+=1
     url_to_redirect = '/todos/'
+    if page_for_update is not None:
+        page = page_for_update
     if page > 1:
         url_to_redirect = '/todos/?page={}'.format(page)
     return url_to_redirect
