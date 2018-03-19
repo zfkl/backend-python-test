@@ -191,8 +191,9 @@ def todo_delete(id):
     return redirect(url)
 
 
-@app.route('/todo/?is_completed=<is_completed>&id=<id>', methods=['POST'])
-def todo_update(id, is_completed):
+@app.route('/todo/?is_completed=<is_completed>&id=<id>/', defaults={'page': 1}, methods=['POST'])
+@app.route('/todo/?is_completed=<is_completed>&id=<id>&page=<page>/', methods=['POST'])
+def todo_update(id, is_completed, page):
     """
     Update todo with its is_completed value 0/1, update checkbox checked/not checked
     :param id: todo id
@@ -215,6 +216,5 @@ def todo_update(id, is_completed):
 
     todo_updated.is_completed = is_completed
     db.session.commit()
-
-    url = url_redirect(is_update=True)
+    url = url_redirect(page_for_update=page)
     return redirect(url)
