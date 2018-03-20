@@ -68,7 +68,7 @@ class ToDoViewTest(TestCase):
         with app.test_client() as client:
             client.post('/login', data=dict(username='user1', password='user1'))
             description = 'test'
-            response = client.post('/todo/%3Fis_completed%3DFalse%26id%3D1',
+            response = client.post('/todo/%3Fis_completed%3DFalse%26id%3D1/',
                                    data=dict(description=description))
             self.assertEquals(response.status_code, 302)
 
@@ -77,7 +77,7 @@ class ToDoViewTest(TestCase):
         with app.test_client() as client:
             client.post('/login', data=dict(username='user1', password='user1'))
             description = 'test'
-            response = client.post('/todo/%3Fis_completed%3DFalse%26id%3D1000',
+            response = client.post('/todo/%3Fis_completed=True&id=1000&page=4/',
                                    data=dict(description=description))
             self.assertEquals(response.status_code, 404)
 
@@ -86,7 +86,7 @@ class ToDoViewTest(TestCase):
         with app.test_client() as client:
             client.post('/login', data=dict(username='user1', password='user1'))
             description = 'test'
-            response = client.post('/todo/%3Fis_completed%3DFalse%26id%3D6',
+            response = client.post('/todo/%3Fis_completed%3DFalse%26id%3D6/',
                                    data=dict(description=description))
             self.assertEquals(response.status_code, 401)
 
