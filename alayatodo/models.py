@@ -1,17 +1,16 @@
+"""
+Models for test app:
+todos and users
+each user has a list of todos that each can be read, deleted, updated and created
+"""
+
 from alayatodo import app
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import Column, String
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
 
 db = SQLAlchemy(app)
 
-Base = declarative_base()
-engine = create_engine('sqlite:///alayacare.sqlite3', echo=True)
-Session = sessionmaker(bind=engine)
 
-class users(db.Model):
+class Users(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
     username = db.Column('username', db.String(255))
     password = db.Column('password', db.String(255))
@@ -20,7 +19,8 @@ class users(db.Model):
         self.username = username
         self.password = password
 
-class todos(db.Model):
+
+class Todos(db.Model):
     id = db.Column('id', db.Integer, primary_key=True)
     user_id = db.Column('user_id', db.Integer)
     description = db.Column('description', db.String(255))
