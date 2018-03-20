@@ -2,8 +2,6 @@ import json
 
 from alayatodo import app
 from flask import (
-    abort,
-    g,
     redirect,
     render_template,
     request,
@@ -12,61 +10,73 @@ from flask import (
     flash
     )
 from collections import OrderedDict
-from werkzeug.exceptions import BadRequest, Unauthorized, NotFound
+from helpers import model_serializer
+from models import users, todos, db
+from werkzeug.exceptions import NotFound, Unauthorized
+
 
 @app.route('/')
 def home():
+    """Give instruction for test"""
     with app.open_resource('../README.md', mode='r') as f:
         readme = "".join(l.decode('utf-8') for l in f)
         return render_template('index.html', readme=readme)
 
 
 @app.route('/login', methods=['GET'])
-def login():
+def login_get():
+    """Render Login page functionnality"""
     return render_template('login.html')
 
 
 @app.route('/login', methods=['POST'])
-def login_POST():
+def login_post():
+    """Process login for user
+    serialize model to update session with 'user' tag
+    update session with 'logged_in' tag
+    redirect to login/ if no success
+    """
     username = request.form.get('username')
     password = request.form.get('password')
-
-    sql = "SELECT * FROM users WHERE username = '%s' AND password = '%s'";
-    cur = g.db.execute(sql % (username, password))
-    user = cur.fetchone()
+    user = users.query.filter_by(username=username).filter_by(password=password).first()
     if user:
-        session['user'] = dict(user)
         session['logged_in'] = True
-        return redirect('/todo')
+        session['user'] = model_serializer(user)
+        return redirect('/todos')
 
     return redirect('/login')
 
 
 @app.route('/logout')
 def logout():
+    """update session with None for both 'logged_in' and 'user' tags
+    redirect to home page
+    """
     session.pop('logged_in', None)
     session.pop('user', None)
     return redirect('/')
 
 
 @app.route('/todo/<id>', methods=['GET'])
-def todo(id):
+def todo_get(id):
     """
     Read a todo only with id, user_id, description if exist
     empty if not exist
     :param id: todo id
     :return: /todo (item)
-    TODO: 404 if no todo
-    TODO: Only can read own user todo
     """
-    cur = g.db.execute("SELECT * FROM todos WHERE id =%s" % id)
-    todo = cur.fetchone()
-    return render_template('todo.html', todo=todo)
+
+    todo_read = todos.query.get(id)
+    if todo_read is None:
+        raise NotFound("todo not found")
+    if todo_read.user_id != session['user']['id']:
+        raise Unauthorized("Not your todo")
+    return render_template('todo.html', todo=todo_read)
 
 
-@app.route('/todo', methods=['GET'])
-@app.route('/todo/', methods=['GET'])
-def todos():
+@app.route('/todos', methods=['GET'])
+@app.route('/todos/', methods=['GET'])
+def todos_get():
     """Authenticate users
     :param empty
     :return
@@ -78,36 +88,39 @@ def todos():
      -add max retry
      -add forget credentials
      -add bearer token authentication
-     -only read own users todo unless admin user
     """
     if not session.get('logged_in'):
         return redirect('/login')
-    cur = g.db.execute("SELECT * FROM todos")
-    todos = cur.fetchall()
-    if session.get('empty_description'):
+
+    # todos_read = todos.query.all() to keep for testing impersonification on UI
+    todos_read = todos.query.filter_by(user_id=session['user']['id'])
+    if hasattr(session, 'empty_description'):
         error_empty = True
-        session.pop('empty_description', None)
+        setattr(session, 'empty_description', None)
     return render_template('todos.html', **locals())
 
 @app.route('/todo/<id>/json', methods=['GET'])
-def todo_json(id):
+def todo_json_get(id):
     """
     Read json from todo data based on todo id
     :param id: todo id
     :return: json data for single todo
-    TODO: only read user own data unless admin user
-    """
+=    """
     if not session.get('logged_in'):
         return redirect('/login')
-    cur = g.db.execute("SELECT * FROM todos WHERE id ='%s'" % id)
-    todo = cur.fetchone()
-    if todo is None:
-        return abort(404)
-    todo_dump = json.dumps(OrderedDict(todo))
+
+    todo_read = todos.query.get(id)
+    if todo_read is None:
+        return NotFound("todo not found")
+
+    if todo_read.user_id != session['user']['id']:
+        raise Unauthorized("Not your todo")
+
+    todo_dump = json.dumps(model_serializer(todo_read))
     return Response(todo_dump, status=200, mimetype='application/json')
 
 @app.route('/todo/', methods=['POST'])
-def todos_POST():
+def todo_post():
     """This view is for Create todo:
     -Create a new Todo that is not empty string. There must be the 'description'
     tag in request form  or it will be a todo Update.
@@ -121,18 +134,18 @@ def todos_POST():
     req = request
     if not session.get('logged_in'):
         return redirect('/login')
+
     todo_description = request.form.get('description', '')
     if not todo_description:
         flash('Please add your todo description')
         session['empty_description'] = True
-        return redirect('/todo')
-    g.db.execute(
-        "INSERT INTO todos (user_id, description, is_completed) VALUES (%s, '%s', %s)"
-        % (session['user']['id'], todo_description, 0)
-    )
-    g.db.commit()
+        return redirect('/todos')
+
+    todo_inserted = todos(user_id=session['user']['id'], description=todo_description, is_completed=0)
+    db.session.add(todo_inserted)
+    db.session.commit()
     flash('Todo {} is added!'.format(todo_description))
-    return redirect('/todo')
+    return redirect('/todos')
 
 
 @app.route('/todo/<id>', methods=['POST'])
@@ -146,14 +159,18 @@ def todo_delete(id):
     """
     if not session.get('logged_in'):
         return redirect('/login')
-    cur = g.db.execute("SELECT description FROM todos WHERE id ='%s'" % id)
-    todo = cur.fetchone()
-    if todo is not None:
-        todo_description = dict(todo)['description']
-        flash('Todo {} is removed!'.format(todo_description))
-    g.db.execute("DELETE FROM todos WHERE id =%s" % id)
-    g.db.commit()
-    return redirect('/todo')
+
+    # cur = g.db.execute("SELECT description FROM todos WHERE id ='%s'" % id)
+    # todo = cur.fetchone()
+    todo_read = todos.query.get(id)
+    if todo_read is None:
+        raise NotFound("todo not found")
+
+    todo_description = model_serializer(todo_read)['description']
+    flash('Todo {} is removed!'.format(todo_description))
+    todos.query.delete(id)
+    db.session.commit()
+    return redirect('/todos')
 
 @app.route('/todo/?is_completed=<is_completed>&id=<id>', methods=['POST'])
 def todo_update(id, is_completed):
@@ -165,14 +182,18 @@ def todo_update(id, is_completed):
     redirect to /todo (list of todos)
     """
     req = request
+    _id = session['user']['id']
     if not session.get('logged_in'):
         return redirect('/login')
-    is_completed = int(is_completed == 'True')
-    cur = g.db.execute(
-        "UPDATE todos SET is_completed = %s where id =%s AND user_id = %s" % (is_completed, id, session['user']['id'])
-    )
 
-    if cur.rowcount == 0:
-        raise NotFound("It is not your task")
-    g.db.commit()
-    return redirect('/todo')
+    is_completed = int(is_completed == 'True')
+    todo_updated = todos.query.get(id)
+    if todo_updated is None:
+        raise NotFound("todo not found")
+
+    if todo_updated.user_id != session['user']['id']:
+        raise Unauthorized("Not your todo")
+
+    todo_updated.is_completed = is_completed
+    db.session.commit()
+    return redirect('/todos')
